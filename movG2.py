@@ -12,18 +12,19 @@ PLANNER_FDSS23MINHA = "/home/matheus-brant/Desktop/downward-fdss23/fast-downward
 
 class EnhancedGameMap:
     def __init__(self, lines):
+        # Armazena cada linha preservando seu tamanho original
         self.grid = [list(line.rstrip("\n")) for line in lines if line.strip() != ""]
         self.height = len(self.grid)
-        self.width = len(self.grid[0]) if self.height > 0 else 0
-
+        # self.width não será mais usado como tamanho fixo para todas as linhas
+        
         self.pacman_pos = None    # (x, y) onde 'P' aparece
         self.ghosts = []          # Lista de tuplas (x, y, símbolo) para fantasmas ('R','G','B')
         self.fruits = []          # Lista de tuplas (x, y, símbolo) para frutas ('!', '@', '$')
         self.cells = []           # Lista de coordenadas (x,y) de células que não são paredes
 
-        for y in range(self.height):
-            for x in range(self.width):
-                char = self.grid[y][x]
+        for y, row in enumerate(self.grid):
+            for x in range(len(row)):
+                char = row[x]
                 if char != '#':
                     self.cells.append((x, y))
                 if char == 'P':
@@ -45,7 +46,9 @@ class EnhancedGameMap:
             nx, ny = x - 1, y
         else:
             return None
-        if 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] != '#':
+        
+        # Verifica se ny está dentro do grid e se nx está dentro do tamanho da linha ny
+        if 0 <= ny < self.height and 0 <= nx < len(self.grid[ny]) and self.grid[ny][nx] != '#':
             return (nx, ny)
         else:
             return None
