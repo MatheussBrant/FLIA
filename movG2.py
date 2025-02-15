@@ -51,7 +51,7 @@ class EnhancedGameMap:
             return None
 
 def generate_pddl(game_map):
-    # Domínio com as alterações para incluir o predicado ghosts-pending.
+    # Domínio com as alterações para incluir o predicado ghosts-pending e a modelagem de colisão.
     domain_str = """(define (domain pacman-agile)
   (:requirements :typing :negative-preconditions :conditional-effects :adl :action-costs)
   (:types cell ghost fruit)
@@ -82,12 +82,25 @@ def generate_pddl(game_map):
          (at-pacman ?from)
          (not (ghosts-pending))
          (connected-north ?from ?to)
+         ;; Verifica que não há fantasma já na célula destino.
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
                          (ghost-alive ?g)
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         ;; NOVO: Verifica que não há fantasma em célula adjacente que se moveria para ?to na ghost-turn.
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-south ?x ?to))
+                           (and (ghost-type ?g green-fruit) (connected-north ?x ?to))
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
@@ -121,6 +134,17 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-north ?x ?to))
+                           (and (ghost-type ?g green-fruit) (connected-south ?x ?to))
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
@@ -154,6 +178,17 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-west ?x ?to))
+                           (and (ghost-type ?g green-fruit) (connected-east ?x ?to))
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
@@ -187,6 +222,17 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-east ?x ?to))
+                           (and (ghost-type ?g green-fruit) (connected-west ?x ?to))
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
