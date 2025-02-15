@@ -51,7 +51,8 @@ class EnhancedGameMap:
             return None
 
 def generate_pddl(game_map):
-    # Domínio com as alterações para incluir o predicado ghosts-pending e a modelagem de colisão.
+    # Domínio com as alterações para incluir o predicado ghosts-pending e a modelagem de colisão,
+    # além da restrição que impede a troca de poder se o fantasma do tipo ativo ainda está vivo.
     domain_str = """(define (domain pacman-agile)
   (:requirements :typing :negative-preconditions :conditional-effects :adl :action-costs)
   (:types cell ghost fruit)
@@ -89,7 +90,7 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
-         ;; NOVO: Verifica que não há fantasma em célula adjacente que se moveria para ?to na ghost-turn.
+         ;; Verifica que não há fantasma em célula adjacente que se moveria para ?to na ghost-turn.
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -100,6 +101,24 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
+         ))
+         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
+         (not (or
+            (and (active-fruit blue-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g blue-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f blue-fruit)))))
+            (and (active-fruit red-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f red-fruit)))))
+            (and (active-fruit green-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g green-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f green-fruit)))))
          ))
     )
     :effect (and 
@@ -145,6 +164,24 @@ def generate_pddl(game_map):
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
          ))
+         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
+         (not (or
+            (and (active-fruit blue-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g blue-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f blue-fruit)))))
+            (and (active-fruit red-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f red-fruit)))))
+            (and (active-fruit green-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g green-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f green-fruit)))))
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
@@ -189,6 +226,24 @@ def generate_pddl(game_map):
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
          ))
+         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
+         (not (or
+            (and (active-fruit blue-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g blue-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f blue-fruit)))))
+            (and (active-fruit red-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f red-fruit)))))
+            (and (active-fruit green-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g green-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f green-fruit)))))
+         ))
     )
     :effect (and 
          (not (at-pacman ?from))
@@ -232,6 +287,24 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
+         ))
+         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
+         (not (or
+            (and (active-fruit blue-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g blue-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f blue-fruit)))))
+            (and (active-fruit red-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f red-fruit)))))
+            (and (active-fruit green-fruit)
+                 (exists (?g - ghost)
+                    (and (ghost-type ?g green-fruit) (ghost-alive ?g)))
+                 (exists (?f - fruit)
+                    (and (fruit-at ?f ?to) (not (= ?f green-fruit)))))
          ))
     )
     :effect (and 
