@@ -54,8 +54,6 @@ class EnhancedGameMap:
             return None
 
 def generate_pddl(game_map):
-    # Domínio com as alterações para incluir o predicado ghosts-pending e a modelagem de colisão,
-    # além da restrição que impede a troca de poder se o fantasma do tipo ativo ainda está vivo.
     domain_str = """(define (domain pacman-agile)
   (:requirements :typing :negative-preconditions :conditional-effects :adl :action-costs)
   (:types cell ghost fruit)
@@ -127,19 +125,12 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-south))
          (not (last-move-east))
          (not (last-move-west))
          (last-move-north)
          (increase (total-cost) 1)
-         (ghosts-pending)  ;; Indica que os fantasmas ainda não se moveram
+         (ghosts-pending)
     )
   )
   
@@ -167,7 +158,6 @@ def generate_pddl(game_map):
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
          ))
-         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
          (not (or
             (and (active-fruit blue-fruit)
                  (exists (?g - ghost)
@@ -189,13 +179,6 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-east))
          (not (last-move-west))
@@ -229,7 +212,6 @@ def generate_pddl(game_map):
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
          ))
-         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
          (not (or
             (and (active-fruit blue-fruit)
                  (exists (?g - ghost)
@@ -251,13 +233,6 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-west))
@@ -291,7 +266,6 @@ def generate_pddl(game_map):
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
                     )
          ))
-         ;; NOVA restrição: impede a troca de poder se houver fantasma vivo do tipo ativo e a célula tem fruta de outro tipo.
          (not (or
             (and (active-fruit blue-fruit)
                  (exists (?g - ghost)
@@ -313,13 +287,6 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-east))
@@ -471,6 +438,52 @@ def generate_pddl(game_map):
              )
          )
          (increase (total-cost) 2)
+    )
+  )
+  
+  ;; Ações para matar fantasmas, modeladas separadamente, similar ao comer frutas.
+  (:action kill-ghost-red
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g red-fruit)
+         (ghost-alive ?g)
+         (active-fruit red-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
+    )
+  )
+  
+  (:action kill-ghost-green
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g green-fruit)
+         (ghost-alive ?g)
+         (active-fruit green-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
+    )
+  )
+  
+  (:action kill-ghost-blue
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g blue-fruit)
+         (ghost-alive ?g)
+         (active-fruit blue-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
     )
   )
 )"""
