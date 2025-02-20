@@ -70,9 +70,45 @@ def simulate_red_ghost_move(pos, current_direction, game_map):
             return new_pos, d
     return pos, current_direction
 
+def detect_cycle_in_red_ghost_movement(start_pos, start_direction, game_map, max_steps=1000):
+    """
+    Simula o movimento do fantasma vermelho e detecta o ciclo.
+    
+    :param start_pos: Tupla (x, y) com a posição inicial.
+    :param start_direction: String com a direção inicial ("north", "south", "east", "west").
+    :param game_map: Instância de EnhancedGameMap.
+    :param max_steps: Número máximo de passos para evitar loop infinito.
+    :return: Uma tupla (prefix, cycle) onde:
+             - prefix é uma lista de movimentos (tuplas (from, to)) até o início do ciclo;
+             - cycle é a lista de movimentos que se repetem ciclicamente.
+    """
+    seen_states = {}  # chave: (pos, direction), valor: índice do movimento
+    moves = []        # cada movimento é uma tupla: (from_pos, to_pos)
+    
+    current_pos = start_pos
+    current_direction = start_direction
+
+    for _ in range(max_steps):
+        state = (current_pos, current_direction)
+        if state in seen_states:
+            cycle_start_index = seen_states[state]
+            prefix = moves[:cycle_start_index]
+            cycle = moves[cycle_start_index:]
+            return prefix, cycle
+        else:
+            seen_states[state] = len(moves)
+        
+        new_pos, new_direction = simulate_red_ghost_move(current_pos, current_direction, game_map)
+        moves.append((current_pos, new_pos))
+        current_pos, current_direction = new_pos, new_direction
+
+    # Se não detectar ciclo, retorna tudo como prefix e ciclo vazio
+    return moves, []
+
 def generate_pddl(game_map):
     # Domínio modificado para incluir a modelagem do movimento pré-definido do fantasma vermelho.
-    # São adicionados os tipos e predicados para os passos:
+    # A movimentação do red ghost será realizada por uma ação separada "move-red"
+    # que utiliza os fatos pré-computados (expected-move) para determinar o movimento.
     domain_str = """(define (domain pacman-agile)
   (:requirements :typing :negative-preconditions :conditional-effects :adl :action-costs)
   (:types cell ghost fruit step)
@@ -92,10 +128,14 @@ def generate_pddl(game_map):
     (last-move-south)
     (last-move-east)
     (last-move-west)
+    ;; A flag ghosts-pending será ativada somente se houver ghost azul ou verde vivos
     (ghosts-pending)
+    ;; Flag para o red ghost
+    (red-pending)
     ;; Predicados para o movimento pré-definido do fantasma vermelho
     (current-step ?s - step)
     (expected-move ?s - step ?from - cell ?to - cell)
+    (next-step ?s - step ?ns - step)
   )
   (:functions (total-cost) - number)
   
@@ -104,6 +144,7 @@ def generate_pddl(game_map):
     :parameters (?from - cell ?to - cell)
     :precondition (and 
          (at-pacman ?from)
+         (not (red-pending))
          (not (ghosts-pending))
          (connected-north ?from ?to)
          (not (exists (?g - ghost)
@@ -118,6 +159,14 @@ def generate_pddl(game_map):
                          (or 
                            (and (ghost-type ?g blue-fruit) (connected-south ?x ?to))
                            (and (ghost-type ?g green-fruit) (connected-north ?x ?to))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?to))
+                                    (and (connected-south ?x ?to))
+                                    (and (connected-east  ?x ?to))
+                                    (and (connected-west  ?x ?to))
+                                )
+                             )
                          )
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
@@ -144,19 +193,20 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-south))
          (not (last-move-east))
          (not (last-move-west))
          (last-move-north)
          (increase (total-cost) 1)
-         (ghosts-pending)
+         (when (exists (?g - ghost)
+                    (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
+                        (and (ghost-type ?g green-fruit) (ghost-alive ?g))))
+               (ghosts-pending)
+         )
+         (when (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending)
+         )
     )
   )
   
@@ -166,6 +216,7 @@ def generate_pddl(game_map):
     :precondition (and 
          (at-pacman ?from)
          (not (ghosts-pending))
+         (not (red-pending))
          (connected-south ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
@@ -179,6 +230,14 @@ def generate_pddl(game_map):
                          (or 
                            (and (ghost-type ?g blue-fruit) (connected-north ?x ?to))
                            (and (ghost-type ?g green-fruit) (connected-south ?x ?to))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?to))
+                                    (and (connected-south ?x ?to))
+                                    (and (connected-east  ?x ?to))
+                                    (and (connected-west  ?x ?to))
+                                )
+                             )
                          )
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
@@ -205,19 +264,20 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-east))
          (not (last-move-west))
          (last-move-south)
          (increase (total-cost) 1)
-         (ghosts-pending)
+         (when (exists (?g - ghost)
+                    (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
+                        (and (ghost-type ?g green-fruit) (ghost-alive ?g))))
+               (ghosts-pending)
+         )
+         (when (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending)
+         )
     )
   )
   
@@ -227,6 +287,7 @@ def generate_pddl(game_map):
     :precondition (and 
          (at-pacman ?from)
          (not (ghosts-pending))
+         (not (red-pending))
          (connected-east ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
@@ -240,6 +301,14 @@ def generate_pddl(game_map):
                          (or 
                            (and (ghost-type ?g blue-fruit) (connected-west ?x ?to))
                            (and (ghost-type ?g green-fruit) (connected-east ?x ?to))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?to))
+                                    (and (connected-south ?x ?to))
+                                    (and (connected-east  ?x ?to))
+                                    (and (connected-west  ?x ?to))
+                                )
+                             )
                          )
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
@@ -266,19 +335,20 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-west))
          (last-move-east)
          (increase (total-cost) 1)
-         (ghosts-pending)
+         (when (exists (?g - ghost)
+                    (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
+                        (and (ghost-type ?g green-fruit) (ghost-alive ?g))))
+               (ghosts-pending)
+         )
+         (when (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending)
+         )
     )
   )
   
@@ -288,6 +358,7 @@ def generate_pddl(game_map):
     :precondition (and 
          (at-pacman ?from)
          (not (ghosts-pending))
+         (not (red-pending))
          (connected-west ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
@@ -301,6 +372,14 @@ def generate_pddl(game_map):
                          (or 
                            (and (ghost-type ?g blue-fruit) (connected-east ?x ?to))
                            (and (ghost-type ?g green-fruit) (connected-west ?x ?to))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?to))
+                                    (and (connected-south ?x ?to))
+                                    (and (connected-east  ?x ?to))
+                                    (and (connected-west  ?x ?to))
+                                )
+                             )
                          )
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))
@@ -327,23 +406,25 @@ def generate_pddl(game_map):
     :effect (and 
          (not (at-pacman ?from))
          (at-pacman ?to)
-         (forall (?g - ghost)
-             (when (and (ghost-alive ?g) (ghost-at ?g ?to)
-                        (exists (?f - fruit)
-                                (and (active-fruit ?f) (ghost-type ?g ?f))))
-                   (not (ghost-alive ?g))
-             )
-         )
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-east))
          (last-move-west)
          (increase (total-cost) 1)
-         (ghosts-pending)
+         (when (exists (?g - ghost)
+                    (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
+                        (and (ghost-type ?g green-fruit) (ghost-alive ?g))))
+               (ghosts-pending)
+         )
+         (when (exists (?g - ghost)
+                    (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending)
+         )
     )
   )
   
-  ;; Ação ghost-turn: movimenta os fantasmas e remove a marca de pendência.
+  ;; Ação ghost-turn: movimenta os fantasmas azuis e verdes.
+  ;; Agora, o movimento do red ghost NÃO está aqui.
   (:action ghost-turn
     :parameters ()
     :precondition (and 
@@ -433,25 +514,34 @@ def generate_pddl(game_map):
                         (ghost-at ?g ?to))
              )
          )
-         ;; Bloco para fantasmas vermelhos: movimento pré-definido (sentido horário)
-         (forall (?g - ghost ?from - cell ?to - cell ?s - step ?next - step)
-             (when (and (ghost-alive ?g)
-                        (ghost-type ?g red-fruit)
-                        (ghost-at ?g ?from)
-                        (current-step ?s)
-                        (expected-move ?s ?from ?to))
-                   (and (not (ghost-at ?g ?from))
-                        (ghost-at ?g ?to)
-                        (not (current-step ?s))
-                        (current-step ?next))
-             )
-         )
          ;; Limpa flags de movimento e a marca de pendência.
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-east))
          (not (last-move-west))
          (not (ghosts-pending))
+    )
+  )
+  
+  ;; Nova ação para movimentar o red ghost, usando a sequência pré-computada.
+  (:action move-red
+    :parameters (?g - ghost ?from - cell ?to - cell ?s - step ?next - step)
+    :precondition (and
+         (red-pending)
+         (ghost-at ?g ?from)
+         (ghost-type ?g red-fruit)
+         (ghost-alive ?g)
+         (current-step ?s)
+         (expected-move ?s ?from ?to)
+         (next-step ?s ?next)
+    )
+    :effect (and
+         (not (ghost-at ?g ?from))
+         (ghost-at ?g ?to)
+         (not (red-pending))
+         (not (current-step ?s))
+         (current-step ?next)
+         (increase (total-cost) 1)
     )
   )
   
@@ -500,6 +590,52 @@ def generate_pddl(game_map):
          (increase (total-cost) 2)
     )
   )
+
+    ;; AÇÕES PARA MATAR FANTASMAS
+  (:action kill-ghost-red
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g red-fruit)
+         (ghost-alive ?g)
+         (active-fruit red-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
+    )
+  )
+  
+  (:action kill-ghost-green
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g green-fruit)
+         (ghost-alive ?g)
+         (active-fruit green-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
+    )
+  )
+  
+  (:action kill-ghost-blue
+    :parameters (?c - cell ?g - ghost)
+    :precondition (and 
+         (at-pacman ?c)
+         (ghost-at ?g ?c)
+         (ghost-type ?g blue-fruit)
+         (ghost-alive ?g)
+         (active-fruit blue-fruit)
+    )
+    :effect (and 
+         (not (ghost-alive ?g))
+         (increase (total-cost) 1)
+    )
+  )
 )"""
 
     # Geração dos objetos e fatos para o problema:
@@ -530,26 +666,35 @@ def generate_pddl(game_map):
     ghost_inits = []
     red_sequence = []  # Fatos para definir a sequência do fantasma vermelho.
     red_sequence_defined = False
+    cycle_start = None  # Índice do primeiro step do ciclo (1-indexado)
+    total_steps = 0     # Total de steps na sequência
     for i, (x, y, symbol) in enumerate(game_map.ghosts):
         gname = f"ghost{i+1}"
         ghost_names.append(gname)
         if symbol == 'R':
             ghost_fruit = "red-fruit"
-            # Gerar a sequência pré-computada usando a simulação.
-            # Supondo que o fantasma vermelho inicia com direção "east".
-            current_pos = (x, y)
-            current_direction = "east"
-            num_steps = 5  # número de passos a simular
-            # Apenas definimos a sequência uma vez (supondo que haja um único fantasma vermelho)
             if not red_sequence_defined:
+                prefix, cycle = detect_cycle_in_red_ghost_movement((x, y), "east", game_map)
+                full_sequence = prefix.copy()
+                if cycle:
+                    # O primeiro movimento do ciclo está na posição len(prefix)+1 (indexação iniciando em 1)
+                    cycle_start = len(prefix) + 1
+                    # Ajusta o último movimento do ciclo para retornar ao início do ciclo
+                    first_cycle_from, _ = cycle[0]
+                    last_move_from, _ = cycle[-1]
+                    cycle[-1] = (last_move_from, first_cycle_from)
+                    full_sequence += cycle
+                else:
+                    full_sequence = prefix
+                # Cria os fatos: o primeiro fato indica o step corrente, os demais definem os expected-move.
                 red_sequence.append("(current-step step1)")
-                for step in range(1, num_steps+1):
-                    new_pos, new_dir = simulate_red_ghost_move(current_pos, current_direction, game_map)
-                    # Garante que as posições simuladas constem no mapeamento (eles devem estar em game_map.cells)
-                    from_cell = cell_names.get(current_pos, f"cR_{current_pos[0]}_{current_pos[1]}")
-                    to_cell = cell_names.get(new_pos, f"cR_{new_pos[0]}_{new_pos[1]}")
-                    red_sequence.append(f"(expected-move step{step} {from_cell} {to_cell})")
-                    current_pos, current_direction = new_pos, new_dir
+                step_facts = []
+                for step_index, (from_pos, to_pos) in enumerate(full_sequence, start=1):
+                    from_cell = cell_names.get(from_pos, f"cR_{from_pos[0]}_{from_pos[1]}")
+                    to_cell = cell_names.get(to_pos, f"cR_{to_pos[0]}_{to_pos[1]}")
+                    step_facts.append(f"(expected-move step{step_index} {from_cell} {to_cell})")
+                red_sequence.extend(step_facts)
+                total_steps = len(full_sequence)
                 red_sequence_defined = True
         elif symbol == 'G':
             ghost_fruit = "green-fruit"
@@ -574,8 +719,19 @@ def generate_pddl(game_map):
     ghost_goals = [f"(not (ghost-alive {g}))" for g in ghost_names]
 
     # Definição dos objetos do tipo step.
-    steps = ["step1", "step2", "step3", "step4"]
+    if total_steps == 0:
+        total_steps = 20  # Valor padrão caso não haja red ghost
+    steps = [f"step{i}" for i in range(1, total_steps+1)]
     steps_obj = " ".join(steps) + " - step"
+
+    # Geração dos fatos next-step para garantir a ordem dos steps.
+    next_steps = []
+    for i in range(1, total_steps):
+        next_steps.append(f"(next-step step{i} step{i+1})")
+    if cycle_start is not None:
+        next_steps.append(f"(next-step step{total_steps} step{cycle_start})")
+    else:
+        next_steps.append(f"(next-step step{total_steps} step{total_steps})")
 
     problem_str = f"""(define (problem mapa-agile)
   (:domain pacman-agile)
@@ -591,6 +747,8 @@ def generate_pddl(game_map):
     {" ".join(fruit_inits)}
     {" ".join(ghost_inits)}
     {" ".join(red_sequence)}
+    {" ".join(next_steps)}
+    (red-step-ok)
     (= (total-cost) 0)
   )
   (:goal (and {" ".join(ghost_goals)}))
