@@ -197,6 +197,9 @@ def generate_pddl(game_map):
          (not (last-move-east))
          (not (last-move-west))
          (last-move-north)
+         (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
+         (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
+         (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -268,6 +271,9 @@ def generate_pddl(game_map):
          (not (last-move-east))
          (not (last-move-west))
          (last-move-south)
+         (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
+         (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
+         (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -339,6 +345,9 @@ def generate_pddl(game_map):
          (not (last-move-south))
          (not (last-move-west))
          (last-move-east)
+         (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
+         (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
+         (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -409,6 +418,9 @@ def generate_pddl(game_map):
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-east))
+         (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
+         (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
+         (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
          (last-move-west)
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
@@ -545,52 +557,6 @@ def generate_pddl(game_map):
     )
   )
   
-  ;; Ações de comer fruta:
-  (:action eat-fruit-red
-    :parameters (?c - cell)
-    :precondition (and (at-pacman ?c) (fruit-at red-fruit ?c))
-    :effect (and 
-         (active-fruit red-fruit)
-         (not (fruit-at red-fruit ?c))
-         (forall (?f - fruit)
-             (when (not (= ?f red-fruit))
-                   (not (active-fruit ?f))
-             )
-         )
-         (increase (total-cost) 2)
-    )
-  )
-  
-  (:action eat-fruit-green
-    :parameters (?c - cell)
-    :precondition (and (at-pacman ?c) (fruit-at green-fruit ?c))
-    :effect (and 
-         (active-fruit green-fruit)
-         (not (fruit-at green-fruit ?c))
-         (forall (?f - fruit)
-             (when (not (= ?f green-fruit))
-                   (not (active-fruit ?f))
-             )
-         )
-         (increase (total-cost) 2)
-    )
-  )
-  
-  (:action eat-fruit-blue
-    :parameters (?c - cell)
-    :precondition (and (at-pacman ?c) (fruit-at blue-fruit ?c))
-    :effect (and 
-         (active-fruit blue-fruit)
-         (not (fruit-at blue-fruit ?c))
-         (forall (?f - fruit)
-             (when (not (= ?f blue-fruit))
-                   (not (active-fruit ?f))
-             )
-         )
-         (increase (total-cost) 2)
-    )
-  )
-
     ;; AÇÕES PARA MATAR FANTASMAS
   (:action kill-ghost-red
     :parameters (?c - cell ?g - ghost)
@@ -634,6 +600,170 @@ def generate_pddl(game_map):
     :effect (and 
          (not (ghost-alive ?g))
          (increase (total-cost) 1)
+    )
+  )
+  
+  (:action dummy-move-north
+    :parameters (?c - cell)
+    :precondition (and
+         (at-pacman ?c)
+         (not (exists (?to - cell) (connected-north ?c ?to)))
+         (not (ghosts-pending))
+         (not (red-pending))
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-south ?x ?c))
+                           (and (ghost-type ?g green-fruit) (connected-north ?x ?c))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?c))
+                                    (and (connected-south ?x ?c))
+                                    (and (connected-east  ?x ?c))
+                                    (and (connected-west  ?x ?c))
+                                )
+                             )
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
+    )
+    :effect (and
+         (at-pacman ?c)
+         (last-move-north)
+         (increase (total-cost) 4)
+         (when (exists (?g - ghost)
+                   (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending))
+         (when (exists (?g - ghost)
+                   (or (and (ghost-type ?g green-fruit) (ghost-alive ?g))
+                       (and (ghost-type ?g blue-fruit) (ghost-alive ?g))))
+               (ghosts-pending))
+    )
+  )
+  
+  (:action dummy-move-south
+    :parameters (?c - cell)
+    :precondition (and
+         (at-pacman ?c)
+         (not (exists (?to - cell) (connected-south ?c ?to)))
+         (not (ghosts-pending))
+         (not (red-pending))
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-north ?x ?c))
+                           (and (ghost-type ?g green-fruit) (connected-south ?x ?c))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?c))
+                                    (and (connected-south ?x ?c))
+                                    (and (connected-east  ?x ?c))
+                                    (and (connected-west  ?x ?c))
+                                )
+                             )
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
+    )
+    :effect (and
+         (at-pacman ?c)
+         (last-move-south)
+         (increase (total-cost) 4)
+         (when (exists (?g - ghost)
+                   (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending))
+         (when (exists (?g - ghost)
+                   (or (and (ghost-type ?g green-fruit) (ghost-alive ?g))
+                       (and (ghost-type ?g blue-fruit) (ghost-alive ?g))))
+               (ghosts-pending))
+    )
+  )
+  
+  (:action dummy-move-east
+    :parameters (?c - cell)
+    :precondition (and
+         (at-pacman ?c)
+         (not (exists (?to - cell) (connected-east ?c ?to)))
+         (not (ghosts-pending))
+         (not (red-pending))
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-west ?x ?c))
+                           (and (ghost-type ?g green-fruit) (connected-east ?x ?c))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?c))
+                                    (and (connected-south ?x ?c))
+                                    (and (connected-east  ?x ?c))
+                                    (and (connected-west  ?x ?c))
+                                )
+                             )
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
+    )
+    :effect (and
+         (at-pacman ?c)
+         (last-move-east)
+         (increase (total-cost) 4)
+         (when (exists (?g - ghost)
+                   (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending))
+         (when (exists (?g - ghost)
+                   (or (and (ghost-type ?g green-fruit) (ghost-alive ?g))
+                       (and (ghost-type ?g blue-fruit) (ghost-alive ?g))))
+               (ghosts-pending))
+    )
+  )
+  
+  (:action dummy-move-west
+    :parameters (?c - cell)
+    :precondition (and
+         (at-pacman ?c)
+         (not (exists (?to - cell) (connected-west ?c ?to)))
+         (not (ghosts-pending))
+         (not (red-pending))
+         (not (exists (?g - ghost ?x - cell)
+                    (and (ghost-alive ?g)
+                         (ghost-at ?g ?x)
+                         (or 
+                           (and (ghost-type ?g blue-fruit) (connected-east ?x ?c))
+                           (and (ghost-type ?g green-fruit) (connected-west ?x ?c))
+                           (and (ghost-type ?g red-fruit)
+                                (or
+                                    (and (connected-north ?x ?c))
+                                    (and (connected-south ?x ?c))
+                                    (and (connected-east  ?x ?c))
+                                    (and (connected-west  ?x ?c))
+                                )
+                             )
+                         )
+                         (not (exists (?f - fruit)
+                                     (and (active-fruit ?f) (ghost-type ?g ?f))))
+                    )
+         ))
+    )
+    :effect (and
+         (at-pacman ?c)
+         (last-move-west)
+         (increase (total-cost) 4)
+         (when (exists (?g - ghost)
+                   (and (ghost-type ?g red-fruit) (ghost-alive ?g)))
+               (red-pending))
+         (when (exists (?g - ghost)
+                   (or (and (ghost-type ?g green-fruit) (ghost-alive ?g))
+                       (and (ghost-type ?g blue-fruit) (ghost-alive ?g))))
+               (ghosts-pending))
     )
   )
 )"""
@@ -759,7 +889,8 @@ def generate_pddl(game_map):
 
 def extract_moves(planner_output):
     moves = []
-    pattern = r"^move-(north|south|east|west)\s+\S+\s+\S+"
+    # Captura tanto move- quanto dummy-move-
+    pattern = r"^(?:move|dummy-move)-(north|south|east|west)\s+\S+\s+\S+"
     for line in planner_output.splitlines():
         line = line.strip()
         m = re.match(pattern, line, re.IGNORECASE)
@@ -778,7 +909,7 @@ def extract_moves(planner_output):
 def chamar_planejador():
     comando = [
         PLANNER_FDSS23,
-        "--search-time-limit", "60",
+        "--search-time-limit", "100",
         "--alias", "lama-first",
         "domain.pddl",
         "problem.pddl"
