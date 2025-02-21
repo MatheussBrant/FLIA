@@ -21,6 +21,7 @@ class EnhancedGameMap:
         self.ghosts = []          # Lista de tuplas (x, y, símbolo) para fantasmas ('R','G','B')
         self.fruits = []          # Lista de tuplas (x, y, símbolo) para frutas ('!', '@', '$')
         self.cells = []           # Lista de coordenadas (x,y) de células que não são paredes
+        self.portals = []         # Lista de coordenadas dos portais (células com ':')
 
         for y, row in enumerate(self.grid):
             for x in range(len(row)):
@@ -33,6 +34,8 @@ class EnhancedGameMap:
                     self.ghosts.append((x, y, char))
                 elif char in ('!', '@', '$'):
                     self.fruits.append((x, y, char))
+                elif char == "O":  # Identifica portais
+                    self.portals.append((x, y))
 
     def get_neighbor(self, x, y, direction):
         """Retorna a célula vizinha em 'direction' se estiver dentro dos limites e não for parede."""
@@ -106,9 +109,8 @@ def detect_cycle_in_red_ghost_movement(start_pos, start_direction, game_map, max
     return moves, []
 
 def generate_pddl(game_map):
-    # Domínio modificado para incluir a modelagem do movimento pré-definido do fantasma vermelho.
-    # A movimentação do red ghost será realizada por uma ação separada "move-red"
-    # que utiliza os fatos pré-computados (expected-move) para determinar o movimento.
+    # Domínio modificado para incluir a modelagem do movimento pré-definido do fantasma vermelho
+    # e a modelagem dos portais.
     domain_str = """(define (domain pacman-agile)
   (:requirements :typing :negative-preconditions :conditional-effects :adl :action-costs)
   (:types cell ghost fruit step)
@@ -136,6 +138,10 @@ def generate_pddl(game_map):
     (current-step ?s - step)
     (expected-move ?s - step ?from - cell ?to - cell)
     (next-step ?s - step ?ns - step)
+    ;; Predicados para os portais
+    (portal ?c - cell)
+    (portal-connected ?from ?to - cell)
+    (pending-portal)
   )
   (:functions (total-cost) - number)
   
@@ -146,6 +152,7 @@ def generate_pddl(game_map):
          (at-pacman ?from)
          (not (red-pending))
          (not (ghosts-pending))
+         (not (pending-portal))
          (connected-north ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
@@ -153,6 +160,26 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         (or 
+            (not (portal ?to))
+            (and 
+            (portal ?to)
+            (not (exists (?g - ghost)
+                    (and (ghost-at ?g ?to)
+                        (ghost-alive ?g)
+                        (not (exists (?f - fruit)
+                                    (and (active-fruit ?f)
+                                        (ghost-type ?g ?f)))))))
+            (not (exists (?g - ghost)
+                    (exists (?l - cell)
+                    (and (portal-connected ?to ?l)
+                            (ghost-at ?g ?l)
+                            (ghost-alive ?g)
+                            (not (exists (?f - fruit)
+                                        (and (active-fruit ?f)
+                                            (ghost-type ?g ?f)))))))))
+            )
+        
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -200,6 +227,7 @@ def generate_pddl(game_map):
          (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
          (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
          (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
+         (when (portal ?to) (pending-portal))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -220,12 +248,32 @@ def generate_pddl(game_map):
          (at-pacman ?from)
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (connected-south ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
                          (ghost-alive ?g)
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
+         )
+         (or 
+            (not (portal ?to))
+            (and 
+            (portal ?to)
+            (not (exists (?g - ghost)
+                    (and (ghost-at ?g ?to)
+                        (ghost-alive ?g)
+                        (not (exists (?f - fruit)
+                                    (and (active-fruit ?f)
+                                        (ghost-type ?g ?f)))))))
+            (not (exists (?g - ghost)
+                    (exists (?l - cell)
+                    (and (portal-connected ?to ?l)
+                            (ghost-at ?g ?l)
+                            (ghost-alive ?g)
+                            (not (exists (?f - fruit)
+                                        (and (active-fruit ?f)
+                                            (ghost-type ?g ?f)))))))))
          )
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
@@ -274,6 +322,7 @@ def generate_pddl(game_map):
          (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
          (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
          (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
+         (when (portal ?to) (pending-portal))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -294,12 +343,32 @@ def generate_pddl(game_map):
          (at-pacman ?from)
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (connected-east ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
                          (ghost-alive ?g)
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
+         )
+         (or 
+            (not (portal ?to))
+            (and 
+            (portal ?to)
+            (not (exists (?g - ghost)
+                    (and (ghost-at ?g ?to)
+                        (ghost-alive ?g)
+                        (not (exists (?f - fruit)
+                                    (and (active-fruit ?f)
+                                        (ghost-type ?g ?f)))))))
+            (not (exists (?g - ghost)
+                    (exists (?l - cell)
+                    (and (portal-connected ?to ?l)
+                            (ghost-at ?g ?l)
+                            (ghost-alive ?g)
+                            (not (exists (?f - fruit)
+                                        (and (active-fruit ?f)
+                                            (ghost-type ?g ?f)))))))))
          )
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
@@ -348,6 +417,7 @@ def generate_pddl(game_map):
          (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
          (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
          (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
+         (when (portal ?to) (pending-portal))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -368,6 +438,7 @@ def generate_pddl(game_map):
          (at-pacman ?from)
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (connected-west ?from ?to)
          (not (exists (?g - ghost)
                     (and (ghost-at ?g ?to)
@@ -375,6 +446,25 @@ def generate_pddl(game_map):
                          (not (exists (?f - fruit)
                                      (and (active-fruit ?f) (ghost-type ?g ?f))))))
          )
+         (or 
+            (not (portal ?to))
+            (and 
+            (portal ?to)
+            (not (exists (?g - ghost)
+                    (and (ghost-at ?g ?to)
+                        (ghost-alive ?g)
+                        (not (exists (?f - fruit)
+                                    (and (active-fruit ?f)
+                                        (ghost-type ?g ?f)))))))
+            (not (exists (?g - ghost)
+                    (exists (?l - cell)
+                    (and (portal-connected ?to ?l)
+                            (ghost-at ?g ?l)
+                            (ghost-alive ?g)
+                            (not (exists (?f - fruit)
+                                        (and (active-fruit ?f)
+                                            (ghost-type ?g ?f)))))))))
+          )
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -418,10 +508,11 @@ def generate_pddl(game_map):
          (not (last-move-north))
          (not (last-move-south))
          (not (last-move-east))
+         (last-move-west)
          (when (fruit-at blue-fruit ?to) (active-fruit blue-fruit))
          (when (fruit-at red-fruit ?to) (active-fruit red-fruit))
          (when (fruit-at green-fruit ?to) (active-fruit green-fruit))
-         (last-move-west)
+         (when (portal ?to) (pending-portal))
          (increase (total-cost) 1)
          (when (exists (?g - ghost)
                     (or (and (ghost-type ?g blue-fruit) (ghost-alive ?g))
@@ -557,7 +648,7 @@ def generate_pddl(game_map):
     )
   )
   
-    ;; AÇÕES PARA MATAR FANTASMAS
+  ;; AÇÃO PARA MATAR FANTASMAS
   (:action kill-ghost-red
     :parameters (?c - cell ?g - ghost)
     :precondition (and 
@@ -566,6 +657,7 @@ def generate_pddl(game_map):
          (ghost-type ?g red-fruit)
          (ghost-alive ?g)
          (active-fruit red-fruit)
+         (not (pending-portal))
     )
     :effect (and 
          (not (ghost-alive ?g))
@@ -581,6 +673,7 @@ def generate_pddl(game_map):
          (ghost-type ?g green-fruit)
          (ghost-alive ?g)
          (active-fruit green-fruit)
+         (not (pending-portal))
     )
     :effect (and 
          (not (ghost-alive ?g))
@@ -596,6 +689,7 @@ def generate_pddl(game_map):
          (ghost-type ?g blue-fruit)
          (ghost-alive ?g)
          (active-fruit blue-fruit)
+         (not (pending-portal))
     )
     :effect (and 
          (not (ghost-alive ?g))
@@ -610,6 +704,7 @@ def generate_pddl(game_map):
          (not (exists (?to - cell) (connected-north ?c ?to)))
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -651,6 +746,7 @@ def generate_pddl(game_map):
          (not (exists (?to - cell) (connected-south ?c ?to)))
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -692,6 +788,7 @@ def generate_pddl(game_map):
          (not (exists (?to - cell) (connected-east ?c ?to)))
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -733,6 +830,7 @@ def generate_pddl(game_map):
          (not (exists (?to - cell) (connected-west ?c ?to)))
          (not (ghosts-pending))
          (not (red-pending))
+         (not (pending-portal))
          (not (exists (?g - ghost ?x - cell)
                     (and (ghost-alive ?g)
                          (ghost-at ?g ?x)
@@ -766,6 +864,24 @@ def generate_pddl(game_map):
                (ghosts-pending))
     )
   )
+  
+  ;; Nova ação para movimentar via portal.
+  (:action move-portal
+    :parameters (?from ?to - cell)
+    :precondition (and
+         (at-pacman ?from)
+         (portal ?from)
+         (portal-connected ?from ?to)
+         (pending-portal)
+         
+    )
+    :effect (and
+         (not (at-pacman ?from))
+         (at-pacman ?to)
+         (not (pending-portal))
+         (increase (total-cost) 1)
+    )
+  )
 )"""
 
     # Geração dos objetos e fatos para o problema:
@@ -791,6 +907,16 @@ def generate_pddl(game_map):
             nx, ny = x + dx, y + dy
             if (nx, ny) in cell_names:
                 connections.append(f"({pred} {cell_names[(x,y)]} {cell_names[(nx,ny)]})")
+
+    # Fatos para os portais
+    portal_facts = []
+    for coord in game_map.portals:
+        portal_facts.append(f"(portal {cell_names[coord]})")
+    if len(game_map.portals) == 2:
+        c1 = cell_names[game_map.portals[0]]
+        c2 = cell_names[game_map.portals[1]]
+        portal_facts.append(f"(portal-connected {c1} {c2})")
+        portal_facts.append(f"(portal-connected {c2} {c1})")
 
     ghost_names = []
     ghost_inits = []
@@ -874,6 +1000,7 @@ def generate_pddl(game_map):
   (:init
     {pacman_init}
     {" ".join(connections)}
+    {" ".join(portal_facts)}
     {" ".join(fruit_inits)}
     {" ".join(ghost_inits)}
     {" ".join(red_sequence)}
